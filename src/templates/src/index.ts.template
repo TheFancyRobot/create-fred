@@ -1,0 +1,123 @@
+import { Fred } from 'fred';
+import { Tool } from 'fred';
+import { Intent } from 'fred';
+
+/**
+ * Setup function for dev-chat.ts
+ * This function is called by the dev chat interface to initialize your Fred instance
+ */
+export async function setup(fred: Fred): Promise<void> {
+
+  // Register {{PROVIDER}} provider
+  // Option 1: Use with explicit API key
+  // await fred.useProvider('{{PROVIDER}}', { apiKey: process.env.{{ENV_VAR_NAME}} });
+  
+  // Option 2: Register default providers (uses environment variables)
+  fred.registerDefaultProviders();
+
+  // Register a tool
+  const calculatorTool: Tool = {
+    id: 'calculator',
+    name: 'calculator',
+    description: 'Perform basic arithmetic operations',
+    parameters: {
+      type: 'object',
+      properties: {
+        operation: {
+          type: 'string',
+          description: 'The operation to perform (add, subtract, multiply, divide)',
+          enum: ['add', 'subtract', 'multiply', 'divide'],
+        },
+        a: {
+          type: 'number',
+          description: 'First number',
+        },
+        b: {
+          type: 'number',
+          description: 'Second number',
+        },
+      },
+      required: ['operation', 'a', 'b'],
+    },
+    execute: async (args) => {
+      const { operation, a, b } = args;
+      switch (operation) {
+        case 'add':
+          return a + b;
+        case 'subtract':
+          return a - b;
+        case 'multiply':
+          return a * b;
+        case 'divide':
+          if (b === 0) throw new Error('Division by zero');
+          return a / b;
+        default:
+          throw new Error(`Unknown operation: ${operation}`);
+      }
+    },
+  };
+
+  fred.registerTool(calculatorTool);
+
+  // Create a default agent (handles unmatched messages)
+  await fred.createAgent({
+    id: 'default-agent',
+    systemMessage: 'You are a helpful AI assistant. If you don\'t know how to respond, ask for clarification.',
+    platform: '{{PROVIDER}}',
+    model: '{{MODEL}}',
+  });
+  fred.setDefaultAgent('default-agent');
+
+  // Create a specialized agent
+  await fred.createAgent({
+    id: 'math-assistant',
+    systemMessage: 'You are a helpful math assistant. Use the calculator tool when needed.',
+    platform: '{{PROVIDER}}',
+    model: '{{MODEL}}',
+    tools: ['calculator'],
+  });
+
+  // Register an intent
+  const mathIntent: Intent = {
+    id: 'math-question',
+    utterances: [
+      'calculate',
+      'compute',
+      'what is',
+      'solve',
+      'math',
+    ],
+    action: {
+      type: 'agent',
+      target: 'math-assistant',
+    },
+  };
+
+  fred.registerIntent(mathIntent);
+}
+
+/**
+ * Main function - runs when this file is executed directly
+ */
+async function main() {
+  const fred = new Fred();
+  await setup(fred);
+  
+  // Process a message
+  console.log('Processing message: "What is 15 + 27?"');
+  const response = await fred.processMessage('What is 15 + 27?');
+  
+  if (response) {
+    console.log('Response:', response.content);
+    if (response.toolCalls) {
+      console.log('Tool calls:', response.toolCalls);
+    }
+  } else {
+    console.log('No response');
+  }
+}
+
+if (import.meta.main) {
+  main().catch(console.error);
+}
+

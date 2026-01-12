@@ -1,0 +1,84 @@
+# {{PROJECT_NAME}}
+
+AI agent project built with [Fred](https://github.com/yourusername/fred) - A flexible framework for building AI agents with intent-based routing.
+
+## Getting Started
+
+### Prerequisites
+
+- [Bun](https://bun.sh) runtime installed
+- {{PROVIDER}} API key
+
+### Installation
+
+1. Install dependencies:
+   ```bash
+   bun install
+   ```
+
+2. Set up your environment variables:
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your {{ENV_VAR_NAME}}
+   ```
+
+### Usage
+
+#### Development Mode
+
+Run the interactive development chat:
+```bash
+bun run dev
+```
+
+#### Server Mode
+
+Start the HTTP server:
+```bash
+bun run server
+```
+
+The server will start on `http://localhost:3000` with the following endpoints:
+- `POST /v1/chat/completions` - OpenAI-compatible chat API
+- `POST /chat` - Simplified chat endpoint
+- `POST /message` - General message processing
+- `GET /agents` - List all agents
+- `GET /intents` - List all intents
+- `GET /tools` - List all tools
+
+#### Using Config Files
+
+You can also use a config file to define your agents, intents, and tools:
+
+```bash
+bun run server --config src/config.json
+```
+
+## Configuration
+
+This project uses {{PROVIDER}} with the {{MODEL}} model.
+
+### Provider Setup
+
+The project is configured to use {{PROVIDER}}. Make sure you have set the `{{ENV_VAR_NAME}}` environment variable or added it to your `.env` file.
+
+### Adding Agents
+
+Agents can be created programmatically or via config files. See `src/index.ts` for examples.
+
+### Adding Intents
+
+Intents route user messages to specific agents. Define them in your code or config file.
+
+### Adding Tools
+
+Tools are reusable functions that agents can call. See `src/tools/` for examples.
+
+## Documentation
+
+For complete documentation, visit: https://yourusername.github.io/fred
+
+## License
+
+MIT
+

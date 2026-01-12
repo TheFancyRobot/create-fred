@@ -1,0 +1,81 @@
+{
+  "intents": [
+    {
+      "id": "greeting",
+      "utterances": [
+        "hello",
+        "hi",
+        "hey",
+        "greetings"
+      ],
+      "action": {
+        "type": "agent",
+        "target": "greeting-agent"
+      }
+    },
+    {
+      "id": "math",
+      "utterances": [
+        "calculate",
+        "compute",
+        "what is",
+        "solve"
+      ],
+      "action": {
+        "type": "agent",
+        "target": "math-agent"
+      }
+    }
+  ],
+  "agents": [
+    {
+      "id": "greeting-agent",
+      "systemMessage": "You are a friendly greeting assistant. Respond warmly to greetings.",
+      "platform": "{{PROVIDER}}",
+      "model": "{{MODEL}}",
+      "temperature": 0.7
+    },
+    {
+      "id": "math-agent",
+      "systemMessage": "You are a helpful math assistant. Use the calculator tool when needed.",
+      "platform": "{{PROVIDER}}",
+      "model": "{{MODEL}}",
+      "tools": ["calculator"],
+      "temperature": 0.3
+    },
+    {
+      "id": "default-agent",
+      "systemMessage": "You are a general purpose AI assistant. If you don't know how to respond, ask for clarification.",
+      "platform": "{{PROVIDER}}",
+      "model": "{{MODEL}}"
+    }
+  ],
+  "tools": [
+    {
+      "id": "calculator",
+      "name": "calculator",
+      "description": "Perform basic arithmetic operations",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string",
+            "description": "The operation to perform (add, subtract, multiply, divide)",
+            "enum": ["add", "subtract", "multiply", "divide"]
+          },
+          "a": {
+            "type": "number",
+            "description": "First number"
+          },
+          "b": {
+            "type": "number",
+            "description": "Second number"
+          }
+        },
+        "required": ["operation", "a", "b"]
+      }
+    }
+  ],
+  "defaultAgentId": "default-agent"
+}
+

@@ -1,0 +1,202 @@
+#!/usr/bin/env bun
+
+/**
+ * Tool creation command
+ */
+
+import { getProjectRoot, readTextFile, writeTextFile, addImport, addCodeAfter, validateKebabCase, toKebabCase } from './utils';
+import { promptText, promptConfirm } from './prompts';
+import { existsSync, readdirSync } from 'fs';
+import { join } from 'path';
+
+export async function handleToolCommand(subcommand: string, args: string[]) {
+  if (subcommand !== 'create') {
+    console.error(`Unknown subcommand: ${subcommand}`);
+    console.error('Available subcommands: create');
+    process.exit(1);
+  }
+  
+  await createTool();
+}
+
+async function createTool() {
+  const projectRoot = getProjectRoot();
+  const toolsDir = join(projectRoot, 'src', 'tools');
+  
+  // Ensure tools directory exists
+  if (!existsSync(toolsDir)) {
+    const fs = await import('fs');
+    fs.mkdirSync(toolsDir, { recursive: true });
+  }
+  
+  // Get existing tools
+  const existingTools = getExistingTools(toolsDir);
+  
+  console.log('\n🛠️  Create a new tool\n');
+  
+  // Tool ID
+  let toolId = '';
+  while (true) {
+    const input = await promptText('Tool ID (kebab-case, e.g., calculator)');
+    const candidate = toKebabCase(input || '');
+    
+    if (!candidate) {
+      console.log('Tool ID cannot be empty.');
+      continue;
+    }
+    
+    const validation = validateKebabCase(candidate);
+    if (!validation.valid) {
+      console.log(`Error: ${validation.error}`);
+      continue;
+    }
+    
+    if (existingTools.includes(candidate)) {
+      console.log(`Tool with ID "${candidate}" already exists.`);
+      continue;
+    }
+    
+    toolId = candidate;
+    break;
+  }
+  
+  // Tool name
+  const toolName = await promptText(
+    'Tool name (display name)',
+    toolId
+  );
+  
+  // Description
+  const description = await promptText(
+    'Tool description (what does this tool do?)',
+    `Tool for ${toolName}`
+  );
+  
+  // Parameters
+  console.log('\nTool parameters (JSON schema):');
+  console.log('You can define parameters later, but here\'s a basic structure:');
+  
+  const hasParams = await promptConfirm('Does this tool need parameters?', true);
+  
+  let parametersSchema = '';
+  if (hasParams) {
+    const paramExample = {
+      type: 'object',
+      properties: {
+        input: {
+          type: 'string',
+          description: 'Input parameter'
+        }
+      },
+      required: ['input']
+    };
+    
+    console.log('\nExample parameters schema:');
+    console.log(JSON.stringify(paramExample, null, 2));
+    console.log('\nYou can edit the generated file to customize parameters.');
+    
+    parametersSchema = JSON.stringify(paramExample, null, 2);
+  } else {
+    parametersSchema = JSON.stringify({
+      type: 'object',
+      properties: {},
+      required: []
+    }, null, 2);
+  }
+  
+  // Generate tool file
+  const toolFileName = `${toolId}.ts`;
+  const toolFilePath = join(toolsDir, toolFileName);
+  
+  const toolExportName = `${toPascalCase(toolId)}Tool`;
+  const toolContent = generateToolFile(toolExportName, toolId, toolName, description, parametersSchema);
+  
+  writeTextFile(toolFilePath, toolContent);
+  
+  // Update src/index.ts
+  const indexPath = join(projectRoot, 'src', 'index.ts');
+  if (!existsSync(indexPath)) {
+    console.error('Error: src/index.ts not found. Cannot update imports.');
+    console.error('Please create src/index.ts first.');
+    process.exit(1);
+  }
+  
+  try {
+    // Add import
+    const importStatement = `import { ${toolExportName} } from './tools/${toolId}';`;
+    addImport(indexPath, importStatement);
+    
+    // Add tool registration
+    const registerCall = `fred.registerTool(${toolExportName});`;
+    const indexContent = readTextFile(indexPath);
+    
+    if (indexContent.includes('fred.registerTool')) {
+      // Add after last registerTool call
+      const lastRegister = indexContent.lastIndexOf('fred.registerTool');
+      const lastRegisterEnd = indexContent.indexOf('\n', lastRegister);
+      addCodeAfter(indexPath, indexContent.substring(lastRegister, lastRegisterEnd), registerCall);
+    } else {
+      // Add after fred initialization
+      addCodeAfter(indexPath, 'const fred = new Fred();', registerCall);
+    }
+  } catch (error) {
+    console.error('Error updating src/index.ts:', error instanceof Error ? error.message : String(error));
+    console.error('You may need to manually add the import and tool registration.');
+    process.exit(1);
+  }
+  
+  console.log(`\n✅ Successfully created tool: ${toolId}`);
+  console.log(`\nFile created: src/tools/${toolFileName}`);
+  console.log(`\nThe tool has been added to src/index.ts.`);
+  console.log(`\nNext steps:`);
+  console.log(`1. Edit src/tools/${toolFileName} to implement the execute function`);
+  console.log(`2. Customize the parameters schema if needed`);
+}
+
+function getExistingTools(toolsDir: string): string[] {
+  if (!existsSync(toolsDir)) {
+    return [];
+  }
+  
+  const files = readdirSync(toolsDir);
+  return files
+    .filter(file => file.endsWith('.ts') && file !== 'example-tool.ts')
+    .map(file => file.replace('.ts', ''));
+}
+
+function generateToolFile(
+  exportName: string,
+  toolId: string,
+  toolName: string,
+  description: string,
+  parametersSchema: string
+): string {
+  return `import { Tool } from 'fred';
+
+/**
+ * ${toolName} tool
+ * ${description}
+ */
+export const ${exportName}: Tool = {
+  id: '${toolId}',
+  name: '${toolName}',
+  description: '${description.replace(/'/g, "\\'")}',
+  parameters: ${parametersSchema},
+  execute: async (args) => {
+    // TODO: Implement tool logic
+    // Example:
+    // const { input } = args;
+    // return \`Processed: \${input}\`;
+    
+    throw new Error('Tool execute function not implemented');
+  },
+};
+`;
+}
+
+function toPascalCase(str: string): string {
+  return str
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join('');
+}

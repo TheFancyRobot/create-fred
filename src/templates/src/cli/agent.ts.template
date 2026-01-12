@@ -1,0 +1,241 @@
+#!/usr/bin/env bun
+
+/**
+ * Agent creation command
+ */
+
+import { getProjectRoot, readTextFile, writeTextFile, addImport, addCodeAfter, getDefaultModel, validateKebabCase, toKebabCase, getProviderPackageName } from './utils';
+import { promptText, promptSelect, promptMultiSelect, promptConfirm } from './prompts';
+import { existsSync, readdirSync } from 'fs';
+import { join } from 'path';
+
+export async function handleAgentCommand(subcommand: string, args: string[]) {
+  if (subcommand !== 'create') {
+    console.error(`Unknown subcommand: ${subcommand}`);
+    console.error('Available subcommands: create');
+    process.exit(1);
+  }
+  
+  await createAgent();
+}
+
+async function createAgent() {
+  const projectRoot = getProjectRoot();
+  const agentsDir = join(projectRoot, 'src', 'agents');
+  
+  // Ensure agents directory exists
+  if (!existsSync(agentsDir)) {
+    const fs = await import('fs');
+    fs.mkdirSync(agentsDir, { recursive: true });
+  }
+  
+  // Get existing agents
+  const existingAgents = getExistingAgents(agentsDir);
+  
+  console.log('\n🤖 Create a new agent\n');
+  
+  // Agent ID
+  let agentId = '';
+  while (true) {
+    const input = await promptText('Agent ID (kebab-case, e.g., math-assistant)');
+    const candidate = toKebabCase(input || '');
+    
+    if (!candidate) {
+      console.log('Agent ID cannot be empty.');
+      continue;
+    }
+    
+    const validation = validateKebabCase(candidate);
+    if (!validation.valid) {
+      console.log(`Error: ${validation.error}`);
+      continue;
+    }
+    
+    if (existingAgents.includes(candidate)) {
+      console.log(`Agent with ID "${candidate}" already exists.`);
+      continue;
+    }
+    
+    agentId = candidate;
+    break;
+  }
+  
+  // System message
+  const systemMessage = await promptText(
+    'System message (what should this agent do?)',
+    'You are a helpful AI assistant.'
+  );
+  
+  // Platform
+  const installedProviders = getInstalledProviders(projectRoot);
+  if (installedProviders.length === 0) {
+    console.error('\nError: No AI SDK providers installed.');
+    console.error('Install a provider first: fred provider add <provider>');
+    process.exit(1);
+  }
+  
+  const platform = await promptSelect(
+    'Select platform',
+    installedProviders
+  );
+  
+  // Model
+  const defaultModel = getDefaultModel(platform);
+  const model = await promptText(
+    'Model name',
+    defaultModel
+  );
+  
+  // Temperature
+  const temperatureInput = await promptText('Temperature (0.0-2.0)', '0.7');
+  const temperature = parseFloat(temperatureInput) || 0.7;
+  
+  // Tools
+  const availableTools = getAvailableTools(projectRoot);
+  let selectedTools: string[] = [];
+  
+  if (availableTools.length > 0) {
+    const useTools = await promptConfirm('Would you like to assign tools to this agent?', false);
+    if (useTools) {
+      selectedTools = await promptMultiSelect(
+        'Select tools (comma-separated numbers or "all")',
+        availableTools
+      );
+    }
+  }
+  
+  // Generate agent file
+  const agentFileName = `${agentId}.ts`;
+  const agentFilePath = join(agentsDir, agentFileName);
+  
+  const agentConfigName = `${toPascalCase(agentId)}Config`;
+  const agentContent = generateAgentFile(agentConfigName, agentId, systemMessage, platform, model, temperature, selectedTools);
+  
+  writeTextFile(agentFilePath, agentContent);
+  
+  // Update src/index.ts
+  const indexPath = join(projectRoot, 'src', 'index.ts');
+  if (!existsSync(indexPath)) {
+    console.error('Error: src/index.ts not found. Cannot update imports.');
+    console.error('Please create src/index.ts first.');
+    process.exit(1);
+  }
+  
+  try {
+    // Add import
+    const importStatement = `import { ${agentConfigName} } from './agents/${agentId}';`;
+    addImport(indexPath, importStatement);
+    
+    // Add agent creation
+    const createCall = `await fred.createAgent(${agentConfigName});`;
+    const searchPattern = 'fred.setDefaultAgent';
+    const indexContent = readTextFile(indexPath);
+    
+    if (indexContent.includes(searchPattern)) {
+      // Add after setDefaultAgent call
+      addCodeAfter(indexPath, searchPattern, createCall);
+    } else if (indexContent.includes('await fred.createAgent')) {
+      // Add after last createAgent call
+      const lastCreate = indexContent.lastIndexOf('await fred.createAgent');
+      const lastCreateEnd = indexContent.indexOf('\n', lastCreate);
+      addCodeAfter(indexPath, indexContent.substring(lastCreate, lastCreateEnd), createCall);
+    } else {
+      // Add after fred initialization
+      addCodeAfter(indexPath, 'const fred = new Fred();', createCall);
+    }
+  } catch (error) {
+    console.error('Error updating src/index.ts:', error instanceof Error ? error.message : String(error));
+    console.error('You may need to manually add the import and agent creation.');
+    process.exit(1);
+  }
+  
+  console.log(`\n✅ Successfully created agent: ${agentId}`);
+  console.log(`\nFile created: src/agents/${agentFileName}`);
+  console.log(`\nThe agent has been added to src/index.ts.`);
+  if (selectedTools.length > 0) {
+    console.log(`\nTools assigned: ${selectedTools.join(', ')}`);
+  }
+}
+
+function getExistingAgents(agentsDir: string): string[] {
+  if (!existsSync(agentsDir)) {
+    return [];
+  }
+  
+  const files = readdirSync(agentsDir);
+  return files
+    .filter(file => file.endsWith('.ts') && file !== 'default-agent.ts')
+    .map(file => file.replace('.ts', ''));
+}
+
+function getInstalledProviders(projectRoot: string): string[] {
+  const packageJsonPath = join(projectRoot, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return [];
+  }
+  
+  const packageJson = JSON.parse(readTextFile(packageJsonPath));
+  const dependencies = packageJson.dependencies || {};
+  
+  const providers: string[] = [];
+  for (const pkg of Object.keys(dependencies)) {
+    if (pkg.startsWith('@ai-sdk/')) {
+      const providerName = pkg.replace('@ai-sdk/', '');
+      providers.push(providerName);
+    }
+  }
+  
+  return providers.sort();
+}
+
+function getAvailableTools(projectRoot: string): string[] {
+  const toolsDir = join(projectRoot, 'src', 'tools');
+  if (!existsSync(toolsDir)) {
+    return [];
+  }
+  
+  const files = readdirSync(toolsDir);
+  return files
+    .filter(file => file.endsWith('.ts'))
+    .map(file => {
+      // Try to extract tool ID from file
+      const content = readTextFile(join(toolsDir, file));
+      const idMatch = content.match(/id:\s*['"]([^'"]+)['"]/);
+      return idMatch ? idMatch[1] : file.replace('.ts', '');
+    });
+}
+
+function generateAgentFile(
+  configName: string,
+  agentId: string,
+  systemMessage: string,
+  platform: string,
+  model: string,
+  temperature: number,
+  tools: string[]
+): string {
+  const toolsArray = tools.length > 0 
+    ? `  tools: [${tools.map(t => `'${t}'`).join(', ')}],`
+    : '';
+  
+  return `import { AgentConfig } from 'fred';
+
+/**
+ * ${agentId} agent configuration
+ */
+export const ${configName}: AgentConfig = {
+  id: '${agentId}',
+  systemMessage: '${systemMessage.replace(/'/g, "\\'")}',
+  platform: '${platform}',
+  model: '${model}',
+  temperature: ${temperature},${toolsArray ? '\n' + toolsArray : ''}
+};
+`;
+}
+
+function toPascalCase(str: string): string {
+  return str
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join('');
+}

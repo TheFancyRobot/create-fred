@@ -1,0 +1,32 @@
+{
+  "name": "{{PROJECT_NAME}}",
+  "version": "0.1.0",
+  "description": "AI agent project built with Fred",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "fred": "./src/cli.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/dev-chat.ts",
+    "server": "bun run src/server.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "test": "bun test"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "fred"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "fred": "{{FRED_VERSION}}",
+    "ai": "^4.0.0",
+    "{{PROVIDER_PACKAGE}}": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
+

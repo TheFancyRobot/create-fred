@@ -1,0 +1,14 @@
+import { AgentConfig } from 'fred';
+
+/**
+ * Default agent configuration
+ * This agent handles messages that don't match any specific intent
+ */
+export const defaultAgentConfig: AgentConfig = {
+  id: 'default-agent',
+  systemMessage: 'You are a helpful AI assistant. If you don\'t know how to respond, ask for clarification.',
+  platform: '{{PROVIDER}}',
+  model: '{{MODEL}}',
+  temperature: 0.7,
+};
+

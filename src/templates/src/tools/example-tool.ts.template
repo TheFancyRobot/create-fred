@@ -1,0 +1,47 @@
+import { Tool } from 'fred';
+
+/**
+ * Example calculator tool
+ * This demonstrates how to create a tool that agents can use
+ */
+export const calculatorTool: Tool = {
+  id: 'calculator',
+  name: 'calculator',
+  description: 'Perform basic arithmetic operations',
+  parameters: {
+    type: 'object',
+    properties: {
+      operation: {
+        type: 'string',
+        description: 'The operation to perform (add, subtract, multiply, divide)',
+        enum: ['add', 'subtract', 'multiply', 'divide'],
+      },
+      a: {
+        type: 'number',
+        description: 'First number',
+      },
+      b: {
+        type: 'number',
+        description: 'Second number',
+      },
+    },
+    required: ['operation', 'a', 'b'],
+  },
+  execute: async (args) => {
+    const { operation, a, b } = args;
+    switch (operation) {
+      case 'add':
+        return a + b;
+      case 'subtract':
+        return a - b;
+      case 'multiply':
+        return a * b;
+      case 'divide':
+        if (b === 0) throw new Error('Division by zero');
+        return a / b;
+      default:
+        throw new Error(`Unknown operation: ${operation}`);
+    }
+  },
+};
+

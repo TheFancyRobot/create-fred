@@ -1,0 +1,49 @@
+{
+  "name": "create-fred",
+  "version": "0.1.0",
+  "description": "CLI tool to scaffold new Fred projects",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "create-fred": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "build": "bun run build:copy-templates && bun build src/index.ts --outdir dist --target bun --minify",
+    "build:copy-templates": "mkdir -p dist/templates && cp -r src/templates dist/",
+    "dev": "bun run src/index.ts",
+    "prepublishOnly": "bun run build && bun run validate:templates",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage",
+    "test:e2e": "bash scripts/test-e2e.sh",
+    "validate:templates": "bun run scripts/validate-templates.ts",
+    "sync:check": "bash scripts/sync-templates.sh"
+  },
+  "keywords": [
+    "fred",
+    "cli",
+    "scaffold",
+    "ai",
+    "agents",
+    "framework"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "prompts": "^2.4.2",
+    "kleur": "^4.1.5",
+    "ora": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/prompts": "^2.4.9"
+  },
+  "peerDependencies": {
+    "fred": "*"
+  }
+}
+

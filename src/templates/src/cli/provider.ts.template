@@ -1,0 +1,199 @@
+#!/usr/bin/env bun
+
+/**
+ * Provider management commands
+ */
+
+import { $ } from 'bun';
+import { getProjectRoot, readJsonFile, writeJsonFile, updateEnvExample, removeFromEnvExample, getProviderPackageName, getProviderEnvVar } from './utils';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+
+const SUPPORTED_PROVIDERS = [
+  'openai',
+  'groq',
+  'anthropic',
+  'google',
+  'mistral',
+  'cohere',
+  'vercel',
+  'azure-openai',
+  'azure-anthropic',
+  'azure',
+  'fireworks',
+  'xai',
+  'ollama',
+  'ai21',
+  'nvidia',
+  'bedrock',
+  'amazon-bedrock',
+  'cloudflare',
+  'elevenlabs',
+  'lepton',
+  'perplexity',
+  'replicate',
+  'together',
+  'upstash',
+];
+
+export async function handleProviderCommand(subcommand: string, args: string[]) {
+  switch (subcommand) {
+    case 'add':
+      if (args.length === 0) {
+        console.error('Error: Provider name is required');
+        console.error('Usage: fred provider add <provider>');
+        process.exit(1);
+      }
+      await addProvider(args[0]);
+      break;
+    
+    case 'remove':
+      if (args.length === 0) {
+        console.error('Error: Provider name is required');
+        console.error('Usage: fred provider remove <provider>');
+        process.exit(1);
+      }
+      await removeProvider(args[0]);
+      break;
+    
+    case 'list':
+      await listProviders();
+      break;
+    
+    default:
+      console.error(`Unknown subcommand: ${subcommand}`);
+      console.error('Available subcommands: add, remove, list');
+      process.exit(1);
+  }
+}
+
+async function addProvider(providerName: string) {
+  const normalized = providerName.toLowerCase();
+  
+  // Validate provider
+  if (!SUPPORTED_PROVIDERS.includes(normalized)) {
+    console.error(`Error: Unsupported provider: ${providerName}`);
+    console.error(`Supported providers: ${SUPPORTED_PROVIDERS.join(', ')}`);
+    process.exit(1);
+  }
+  
+  const projectRoot = getProjectRoot();
+  const packageJsonPath = join(projectRoot, 'package.json');
+  const packageJson = readJsonFile(packageJsonPath);
+  
+  // Check if already installed
+  const packageName = getProviderPackageName(normalized);
+  if (packageJson.dependencies?.[packageName]) {
+    console.log(`Provider ${providerName} is already installed.`);
+    return;
+  }
+  
+  console.log(`Installing ${packageName}...`);
+  
+  // Install package
+  try {
+    await $`bun add ${packageName}`.cwd(projectRoot);
+  } catch (error) {
+    console.error(`Failed to install ${packageName}:`, error);
+    process.exit(1);
+  }
+  
+  // Update .env.example
+  const envVar = getProviderEnvVar(normalized);
+  updateEnvExample(envVar, 'your-api-key-here');
+  
+  // Optionally update src/index.ts if it exists and uses programmatic setup
+  const indexPath = join(projectRoot, 'src', 'index.ts');
+  if (existsSync(indexPath)) {
+    const indexContent = readFileSync(indexPath, 'utf-8');
+    // Check if file uses useProvider pattern
+    if (indexContent.includes('useProvider') || indexContent.includes('registerDefaultProviders')) {
+      // Add a comment suggesting to add the provider
+      // We don't auto-add to avoid breaking user code
+      console.log(`\n💡 Tip: Add this to src/index.ts to use the provider:`);
+      console.log(`   await fred.useProvider('${normalized}', { apiKey: process.env.${envVar} });`);
+    }
+  }
+  
+  console.log(`\n✅ Successfully added ${providerName}!`);
+  console.log(`\nNext steps:`);
+  console.log(`1. Add your API key to .env: ${envVar}=your-actual-api-key`);
+  console.log(`2. Use the provider in your code: await fred.useProvider('${normalized}', { apiKey: process.env.${envVar} });`);
+}
+
+async function removeProvider(providerName: string) {
+  const normalized = providerName.toLowerCase();
+  const projectRoot = getProjectRoot();
+  const packageJsonPath = join(projectRoot, 'package.json');
+  const packageJson = readJsonFile(packageJsonPath);
+  
+  const packageName = getProviderPackageName(normalized);
+  
+  // Check if installed
+  if (!packageJson.dependencies?.[packageName]) {
+    console.log(`Provider ${providerName} is not installed.`);
+    return;
+  }
+  
+  // Check if any agents use this provider
+  const agentsDir = join(projectRoot, 'src', 'agents');
+  if (existsSync(agentsDir)) {
+    // Simple check - look for provider name in agent files
+    // This is a basic check and may not catch all cases
+    const fs = await import('fs');
+    const files = fs.readdirSync(agentsDir);
+    for (const file of files) {
+      if (file.endsWith('.ts')) {
+        const content = fs.readFileSync(join(agentsDir, file), 'utf-8');
+        if (content.includes(`platform: '${normalized}'`) || content.includes(`platform: "${normalized}"`)) {
+          console.warn(`Warning: Agent in ${file} uses ${providerName}. You may need to update it.`);
+        }
+      }
+    }
+  }
+  
+  console.log(`Removing ${packageName}...`);
+  
+  // Uninstall package
+  try {
+    await $`bun remove ${packageName}`.cwd(projectRoot);
+  } catch (error) {
+    console.error(`Failed to remove ${packageName}:`, error);
+    process.exit(1);
+  }
+  
+  // Remove from .env.example
+  const envVar = getProviderEnvVar(normalized);
+  removeFromEnvExample(envVar);
+  
+  console.log(`\n✅ Successfully removed ${providerName}!`);
+  console.log(`\nNote: Make sure to update any code that references this provider.`);
+}
+
+async function listProviders() {
+  const projectRoot = getProjectRoot();
+  const packageJsonPath = join(projectRoot, 'package.json');
+  const packageJson = readJsonFile(packageJsonPath);
+  
+  const installed: string[] = [];
+  const dependencies = packageJson.dependencies || {};
+  
+  for (const [pkg, version] of Object.entries(dependencies)) {
+    if (pkg.startsWith('@ai-sdk/')) {
+      // Extract provider name from package
+      const providerName = pkg.replace('@ai-sdk/', '');
+      installed.push(providerName);
+    }
+  }
+  
+  if (installed.length === 0) {
+    console.log('No AI SDK providers installed.');
+    console.log('Install one with: fred provider add <provider>');
+  } else {
+    console.log('Installed providers:');
+    installed.forEach(provider => {
+      const version = dependencies[`@ai-sdk/${provider}`];
+      console.log(`  - ${provider} (${version})`);
+    });
+  }
+}

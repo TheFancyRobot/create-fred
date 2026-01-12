@@ -1,0 +1,85 @@
+#!/usr/bin/env bun
+
+/**
+ * Fred CLI - Embedded command-line interface for Fred projects
+ * Usage: fred <command> <subcommand> [options]
+ */
+
+import { handleProviderCommand } from './cli/provider';
+import { handleAgentCommand } from './cli/agent';
+import { handleToolCommand } from './cli/tool';
+
+function showHelp() {
+  console.log(`
+Fred CLI - Manage your Fred project
+
+Usage:
+  fred <command> <subcommand> [options]
+
+Commands:
+  provider
+    add <provider>     Add an AI SDK provider
+    remove <provider> Remove an AI SDK provider
+    list              List installed providers
+
+  agent
+    create            Create a new agent (interactive)
+
+  tool
+    create            Create a new tool (interactive)
+
+  help                Show this help message
+
+Examples:
+  fred provider add groq
+  fred provider remove openai
+  fred provider list
+  fred agent create
+  fred tool create
+
+For more information, visit: https://github.com/yourusername/fred
+`);
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  
+  if (args.length === 0 || args[0] === 'help' || args[0] === '--help' || args[0] === '-h') {
+    showHelp();
+    process.exit(0);
+  }
+  
+  const [command, subcommand, ...rest] = args;
+  
+  try {
+    switch (command) {
+      case 'provider':
+        await handleProviderCommand(subcommand, rest);
+        break;
+      
+      case 'agent':
+        await handleAgentCommand(subcommand, rest);
+        break;
+      
+      case 'tool':
+        await handleToolCommand(subcommand, rest);
+        break;
+      
+      default:
+        console.error(`Unknown command: ${command}`);
+        console.error(`Run 'fred help' for usage information.`);
+        process.exit(1);
+    }
+  } catch (error) {
+    console.error('Error:', error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+// Run if this is the main module
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error('Fatal error:', error);
+    process.exit(1);
+  });
+}
