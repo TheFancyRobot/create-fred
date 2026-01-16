@@ -23,7 +23,7 @@ jobs:
       - name: Checkout fred
         uses: actions/checkout@v4
         with:
-          repository: sincspecv/fred
+          repository: TheFancyRobot/fred
           path: fred
           token: ${{ secrets.GITHUB_TOKEN }}
 
