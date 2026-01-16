@@ -35,14 +35,14 @@ jobs:
       - name: Get Fred version
         id: fred-version
         run: |
-          cd fred
+          cd ${{ github.workspace }}/fred
           FRED_VERSION=$(bun -e 'console.log(require("./package.json").version)')
           echo "version=$FRED_VERSION" >> $GITHUB_OUTPUT
           echo "Fred version: $FRED_VERSION"
 
       - name: Check template compatibility
         run: |
-          cd create-fred
+          cd ${{ github.workspace }}/create-fred
           bun install
           
           # Test that templates can import from fred
@@ -54,7 +54,7 @@ jobs:
           cd /tmp/test-sync
           
           # Copy a template and test imports
-          cp ../../create-fred/src/templates/src/index.ts.template test.ts
+          cp ${{ github.workspace }}/create-fred/src/templates/src/index.ts.template test.ts
           
           # Replace template variables
           sed -i 's/{{PROVIDER}}/openai/g' test.ts
@@ -62,17 +62,17 @@ jobs:
           sed -i 's/{{ENV_VAR_NAME}}/OPENAI_API_KEY/g' test.ts
           
           # Try to build/check imports
-          cd ../../fred
+          cd ${{ github.workspace }}/fred
           bun install
-          cd ../create-fred
-          bun add file:../fred
+          cd ${{ github.workspace }}/create-fred
+          bun add file:${{ github.workspace }}/fred
           
           cd /tmp/test-sync
           bun run --bun test.ts || echo "Template compatibility check completed"
 
       - name: Check version mismatch
         run: |
-          cd create-fred
+          cd ${{ github.workspace }}/create-fred
           CURRENT_FRED=$(grep -o '"fred": "[^"]*"' package.json || echo '"fred": "*"')
           echo "Current fred dependency: $CURRENT_FRED"
           echo "Latest fred version: ${{ steps.fred-version.outputs.version }}"
